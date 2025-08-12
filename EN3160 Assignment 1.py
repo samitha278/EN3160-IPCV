@@ -871,82 +871,119 @@ plt.show()
 # ### Question 8
 
 # %%
-def zoom_image(img, scale, method='nearest'):
-    if scale <= 0 or scale > 10:
-        raise ValueError("Scale must be in (0, 10].")
+def zoom(img, technique, scale=4):
+    if technique == 'nn':
+        return cv.resize(img, None, fx=scale, fy=scale, interpolation=cv.INTER_NEAREST)
+    elif technique == 'bilinear':
+        return cv.resize(img, None, fx=scale, fy=scale, interpolation=cv.INTER_LINEAR)
 
-    h, w = img.shape[:2]
-    new_h, new_w = int(h * scale), int(w * scale)
-    
-    zoomed_img = np.zeros((new_h, new_w, *img.shape[2:]), dtype=img.dtype) if img.ndim == 3 else np.zeros((new_h, new_w), dtype=img.dtype)
-    
-    for i in range(new_h):
-        for j in range(new_w):
-            x = i / scale
-            y = j / scale
-            
-            if method == 'nearest':
-                x_nearest = min(round(x), h - 1)
-                y_nearest = min(round(y), w - 1)
-                zoomed_img[i, j] = img[x_nearest, y_nearest]
-            
-            elif method == 'bilinear':
-                x0 = int(np.floor(x))
-                x1 = min(x0 + 1, h - 1)
-                y0 = int(np.floor(y))
-                y1 = min(y0 + 1, w - 1)
-                
-                dx = x - x0
-                dy = y - y0
-                
-                if img.ndim == 2:
-                    val = (1 - dx) * (1 - dy) * img[x0, y0] + \
-                          dx * (1 - dy) * img[x1, y0] + \
-                          (1 - dx) * dy * img[x0, y1] + \
-                          dx * dy * img[x1, y1]
-                    zoomed_img[i, j] = np.clip(val, 0, 255)
-                else:
-                    val = (1 - dx) * (1 - dy) * img[x0, y0, :] + \
-                          dx * (1 - dy) * img[x1, y0, :] + \
-                          (1 - dx) * dy * img[x0, y1, :] + \
-                          dx * dy * img[x1, y1, :]
-                    zoomed_img[i, j, :] = np.clip(val, 0, 255)
-            
-            else:
-                raise ValueError("Method must be 'nearest' or 'bilinear'.")
-    
-    return zoomed_img.astype(img.dtype)
+def norm_SSD(img1, img2):
+    if img1.shape != img2.shape:
+        raise ValueError("Images must have the same dimensions")
+    return np.sum((img1 - img2)**2) / img1.size
 
 
-def normalized_ssd(img1, img2):
-    assert img1.shape == img2.shape, "Images must have the same shape."
-    diff = img1.astype(np.float32) - img2.astype(np.float32)
-    return np.sum(diff ** 2) / np.prod(img1.shape)
+# %%
+# Import images
+im1 = cv.imread('a1images/a1q5images/im02.png')
+assert im1 is not None
+im1_small = cv.imread('a1images/a1q5images/im02small.png')
+assert im1_small is not None
 
+# %%
+im1_zoomed_nn = zoom(im1_small, technique='nn')
+im1_zoomed_bilinear = zoom(im1_small, technique='bilinear')
 
-if __name__ == "__main__":
-    small_img = cv.imread('small_image.png', cv.IMREAD_COLOR)
-    large_img = cv.imread('large_image.png', cv.IMREAD_COLOR)
-    
-    scale_factor = 4
-    
-    zoomed_nearest = zoom_image(small_img, scale_factor, method='nearest')
-    zoomed_bilinear = zoom_image(small_img, scale_factor, method='bilinear')
-    
-    large_img_resized = cv2.resize(large_img, (zoomed_nearest.shape[1], zoomed_nearest.shape[0]), interpolation=cv2.INTER_AREA)
-    
-    ssd_nearest = normalized_ssd(zoomed_nearest, large_img_resized)
-    ssd_bilinear = normalized_ssd(zoomed_bilinear, large_img_resized)
-    
-    print(f"Normalized SSD (Nearest): {ssd_nearest:.4f}")
-    print(f"Normalized SSD (Bilinear): {ssd_bilinear:.4f}")
-    
-    cv2.imshow('Small Image', small_img)
-    cv2.imshow('Zoomed Nearest', zoomed_nearest)
-    cv2.imshow('Zoomed Bilinear', zoomed_bilinear)
-    cv2.imshow('Large Image Resized', large_img_resized)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+nn_SSD = norm_SSD(im1, im1_zoomed_nn)
+bilinear_SSD = norm_SSD(im1, im1_zoomed_bilinear)
 
+print('Normalized SSD for Nearest Neighbour: ', nn_SSD)
+print('Normalized SSD for Bilinear: ', bilinear_SSD)
+
+# %%
+# Create a figure and axes
+fig, axs = plt.subplots(1, 2, figsize=(12, 8))
+
+# Plot the second image
+axs[0].imshow(cv.cvtColor(im1, cv.COLOR_BGR2RGB))
+axs[0].set_title(f'Nearest Neighbour (SSD: {nn_SSD:.5f})', fontsize=18)
+axs[0].axis('off')  # Turn off the axis
+
+# Plot the second image
+axs[1].imshow(cv.cvtColor(im1_zoomed_bilinear, cv.COLOR_BGR2RGB))
+axs[1].set_title(f'Bilinar Interpolation (SSD: {bilinear_SSD:.5f})', fontsize=18)
+axs[1].axis('off')  # Turn off the axis
+
+# Show the plot
+plt.tight_layout()
+plt.show()
+
+# %% [markdown]
+# ### Question 9
+
+# %%
+# Import images
+daisy = cv.imread('a1images/daisy.jpg')
+assert daisy is not None
+
+# %%
+mask = np.zeros(daisy.shape[:2],np.uint8)
+ 
+bgdModel = np.zeros((1,65),np.float64)
+fgdModel = np.zeros((1,65),np.float64)
+
+# %%
+rect = (50,100,550,490)
+cv.grabCut(daisy,mask,rect,bgdModel,fgdModel,5,cv.GC_INIT_WITH_RECT)
+
+mask2 = np.where((mask==2)|(mask==0),0,1).astype('uint8')
+
+# %%
+# Extract the foreground by multiplying the mask with the image
+foreground = daisy * mask2[:, :, np.newaxis]
+
+# Extract the background by subtracting the foreground from the original image
+background = cv.subtract(daisy, foreground)
+
+# Show the results
+fig, axs = plt.subplots(1, 3, figsize=(6,4))
+
+axs[0].imshow(mask2, cmap='gray')
+axs[0].set_title('Segmentation Mask')
+axs[0].axis('off')
+
+axs[1].imshow(cv.cvtColor(foreground, cv.COLOR_BGR2RGB))
+axs[1].set_title('Foreground Image')
+axs[1].axis('off')
+
+axs[2].imshow(cv.cvtColor(background, cv.COLOR_BGR2RGB))
+axs[2].set_title('Background Image')
+axs[2].axis('off')
+
+plt.tight_layout()
+plt.show()
+
+# %%
+# Apply Gaussian blur to the background
+blurred_background = cv.GaussianBlur(background, (25, 25), 3)
+
+# Join image
+blurred = cv.add(foreground, blurred_background)
+
+# Show the results
+fig, axs = plt.subplots(1, 2, figsize=(5,4))
+
+axs[0].imshow(cv.cvtColor(daisy, cv.COLOR_BGR2RGB))
+axs[0].set_title('Original')
+axs[0].axis('off')
+
+axs[1].imshow(cv.cvtColor(blurred, cv.COLOR_BGR2RGB))
+axs[1].set_title('Background blurred image')
+axs[1].axis('off')
+
+plt.tight_layout()
+plt.show()
+
+# %%
 
 # %%
