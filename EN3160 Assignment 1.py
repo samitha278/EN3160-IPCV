@@ -132,6 +132,25 @@ transformed = cv.LUT(gray_im,lut)
 
 
 # %%
+r = np.arange(256)
+output = np.zeros(256)
+
+# Linear segment parameters
+slope = (255 - 100) / (150 - 50)
+intercept = 100 - slope * 50
+
+# Apply piecewise transformation
+mask = (r >= 50) & (r < 150)
+output[mask] = slope * r[mask] + intercept
+  
+output[r < 50] = r[r < 50]
+output[r >= 150] = r[r >= 150]
+
+# Apply intensity transformation
+lut = np.clip(np.round(output), 0, 255).astype(np.uint8)
+transformed_img = cv.LUT(gray_im, lut)
+
+# %%
 plt.figure(figsize=(10,5))
 
 plt.subplot(1,3,1)
@@ -172,6 +191,43 @@ cv.destroyAllWindows()
 
 # %% [markdown]
 # ### part a : white matter
+
+# %%
+# Import brain image
+brain = cv.imread('a1images/brain_proton_density_slice.png', cv.IMREAD_GRAYSCALE)
+assert brain is not None
+
+# %%
+# Define the gaussian pulse
+mu = 150
+sigma = 20
+x = np.linspace(0, 255, 256)
+t = 255 * np.exp(-((x - mu)**2) / (2 * sigma**2))
+
+# Ensure the output is in the valid range for image intensities [0, 255]
+t = np.clip(t, 0, 255)
+
+print(t.shape)
+
+# Plot the array
+plt.figure(figsize=(5, 5))
+plt.plot(t)
+plt.xlabel("Input intensity")
+plt.xlim(0, 255)
+plt.ylim(0, 255)
+plt.ylabel("Output intensity")
+plt.grid(True)
+plt.show()
+
+# %%
+g = t[brain]
+
+# Display the image
+plt.figure(figsize=(5, 5))
+plt.imshow(g, cmap='gray', vmin=0, vmax=255)
+plt.title('White matter')
+plt.axis('off')
+plt.show()
 
 # %%
 r = np.arange(256)
@@ -221,6 +277,37 @@ plt.show()
 
 # %% [markdown]
 # ### part b : gray matter 
+
+# %%
+mu = 200
+sigma = 15
+x = np.linspace(0, 255, 256)
+t = 255 * np.exp(-((x - mu)**2) / (2 * sigma**2))
+
+# Ensure the output is in the valid range for image intensities [0, 255]
+t = np.clip(t, 0, 255)
+
+print(t.shape)
+
+# Plot the array
+plt.figure(figsize=(5, 5))
+plt.plot(t)
+plt.xlabel("Input intensity")
+plt.xlim(0, 255)
+plt.ylim(0, 255)
+plt.ylabel("Output intensity")
+plt.grid(True)
+plt.show()
+
+# %%
+g = t[brain]
+
+# Display the image
+plt.figure(figsize=(5, 5))
+plt.imshow(g, cmap='gray', vmin=0, vmax=255)
+plt.title('Gray matter')
+plt.axis('off')
+plt.show()
 
 # %%
 r = np.arange(256)
@@ -705,6 +792,161 @@ for i, (im, title) in enumerate(zip(images, titles)):
 plt.tight_layout()
 plt.show()
 
+# %% [markdown]
+# ### Question 7
+
 # %%
+img = cv.imread('a1images/einstein.png', cv.IMREAD_GRAYSCALE)
+
+# Define Sobel kernel for horizontal edges (Gx)
+sobel_x = np.array([[1, 0, -1],
+                    [2, 0, -2],
+                    [1, 0, -1]], dtype=np.float32)
+
+# Filter the image using filter2D
+filtered_img = cv.filter2D(img, -1, sobel_x)
+
+# Display
+plt.subplot(1,2,1), plt.title("Original"), plt.imshow(img, cmap='gray'), plt.axis('off')
+plt.subplot(1,2,2), plt.title("Sobel Filtered (Gx)"), plt.imshow(filtered_img, cmap='gray'), plt.axis('off')
+plt.show()
+
+
+# %%
+def convolve2d(image, kernel):
+    # Flip the kernel (convolution)
+    kernel = np.flipud(np.fliplr(kernel))
+    image_h, image_w = image.shape
+    kernel_h, kernel_w = kernel.shape
+    
+    # Output image size
+    output = np.zeros_like(image, dtype=np.float32)
+    
+    # Pad the image to handle borders
+    pad_h = kernel_h // 2
+    pad_w = kernel_w // 2
+    padded_image = np.pad(image, ((pad_h, pad_h), (pad_w, pad_w)), mode='constant', constant_values=0)
+    
+    # Convolve
+    for i in range(image_h):
+        for j in range(image_w):
+            # Extract current region
+            region = padded_image[i:i+kernel_h, j:j+kernel_w]
+            # Element-wise multiply and sum
+            output[i,j] = np.sum(region * kernel)
+    
+    return output
+
+# Use the same Sobel kernel for horizontal gradient
+sobel_x = np.array([[1, 0, -1],
+                    [2, 0, -2],
+                    [1, 0, -1]], dtype=np.float32)
+
+sobel_filtered_custom = convolve2d(img, sobel_x)
+
+plt.subplot(1,2,1), plt.title("Original"), plt.imshow(img, cmap='gray'), plt.axis('off')
+plt.subplot(1,2,2), plt.title("Custom Sobel Filter (Gx)"), plt.imshow(sobel_filtered_custom, cmap='gray'), plt.axis('off')
+plt.show()
+
+
+
+# %%
+# 1D filters
+filter_horizontal = np.array([1, 0, -1], dtype=np.float32).reshape(1, 3)  # Row vector
+filter_vertical = np.array([1, 2, 1], dtype=np.float32).reshape(3, 1)    # Column vector
+
+# First horizontal filtering
+temp = cv.filter2D(img, -1, filter_horizontal)
+
+# Then vertical filtering on the result
+sobel_separable = cv.filter2D(temp, -1, filter_vertical)
+
+plt.subplot(1,3,1), plt.title("Original"), plt.imshow(img, cmap='gray'), plt.axis('off')
+plt.subplot(1,3,2), plt.title("After Horizontal Filter"), plt.imshow(temp, cmap='gray'), plt.axis('off')
+plt.subplot(1,3,3), plt.title("Sobel Filter (Separable)"), plt.imshow(sobel_separable, cmap='gray'), plt.axis('off')
+plt.show()
+
+
+# %% [markdown]
+# ### Question 8
+
+# %%
+def zoom_image(img, scale, method='nearest'):
+    if scale <= 0 or scale > 10:
+        raise ValueError("Scale must be in (0, 10].")
+
+    h, w = img.shape[:2]
+    new_h, new_w = int(h * scale), int(w * scale)
+    
+    zoomed_img = np.zeros((new_h, new_w, *img.shape[2:]), dtype=img.dtype) if img.ndim == 3 else np.zeros((new_h, new_w), dtype=img.dtype)
+    
+    for i in range(new_h):
+        for j in range(new_w):
+            x = i / scale
+            y = j / scale
+            
+            if method == 'nearest':
+                x_nearest = min(round(x), h - 1)
+                y_nearest = min(round(y), w - 1)
+                zoomed_img[i, j] = img[x_nearest, y_nearest]
+            
+            elif method == 'bilinear':
+                x0 = int(np.floor(x))
+                x1 = min(x0 + 1, h - 1)
+                y0 = int(np.floor(y))
+                y1 = min(y0 + 1, w - 1)
+                
+                dx = x - x0
+                dy = y - y0
+                
+                if img.ndim == 2:
+                    val = (1 - dx) * (1 - dy) * img[x0, y0] + \
+                          dx * (1 - dy) * img[x1, y0] + \
+                          (1 - dx) * dy * img[x0, y1] + \
+                          dx * dy * img[x1, y1]
+                    zoomed_img[i, j] = np.clip(val, 0, 255)
+                else:
+                    val = (1 - dx) * (1 - dy) * img[x0, y0, :] + \
+                          dx * (1 - dy) * img[x1, y0, :] + \
+                          (1 - dx) * dy * img[x0, y1, :] + \
+                          dx * dy * img[x1, y1, :]
+                    zoomed_img[i, j, :] = np.clip(val, 0, 255)
+            
+            else:
+                raise ValueError("Method must be 'nearest' or 'bilinear'.")
+    
+    return zoomed_img.astype(img.dtype)
+
+
+def normalized_ssd(img1, img2):
+    assert img1.shape == img2.shape, "Images must have the same shape."
+    diff = img1.astype(np.float32) - img2.astype(np.float32)
+    return np.sum(diff ** 2) / np.prod(img1.shape)
+
+
+if __name__ == "__main__":
+    small_img = cv.imread('small_image.png', cv.IMREAD_COLOR)
+    large_img = cv.imread('large_image.png', cv.IMREAD_COLOR)
+    
+    scale_factor = 4
+    
+    zoomed_nearest = zoom_image(small_img, scale_factor, method='nearest')
+    zoomed_bilinear = zoom_image(small_img, scale_factor, method='bilinear')
+    
+    large_img_resized = cv2.resize(large_img, (zoomed_nearest.shape[1], zoomed_nearest.shape[0]), interpolation=cv2.INTER_AREA)
+    
+    ssd_nearest = normalized_ssd(zoomed_nearest, large_img_resized)
+    ssd_bilinear = normalized_ssd(zoomed_bilinear, large_img_resized)
+    
+    print(f"Normalized SSD (Nearest): {ssd_nearest:.4f}")
+    print(f"Normalized SSD (Bilinear): {ssd_bilinear:.4f}")
+    
+    cv2.imshow('Small Image', small_img)
+    cv2.imshow('Zoomed Nearest', zoomed_nearest)
+    cv2.imshow('Zoomed Bilinear', zoomed_bilinear)
+    cv2.imshow('Large Image Resized', large_img_resized)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
 
 # %%
